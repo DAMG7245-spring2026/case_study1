@@ -1,7 +1,100 @@
 # PE Org-AI-R Platform
 
+An AI-Readiness Assessment Platform for Private Equity organizations. The platform evaluates portfolio companies across seven key AI-readiness dimensions and provides structured assessment workflows for due diligence, screening, portfolio monitoring, and exit preparation.
 
-## Prerequisites
+---
+
+## Link
+
+- FastAPI public URL: http://35.93.9.162:8000/docs
+- Demo video link: https://www.youtube.com/watch?v=ATQqYbEYGnM
+
+---
+
+## Architecture Diagram
+
+![Architecture Diagram](docs/Arcitecture_graph.png)
+
+---
+
+## Directory Structure
+
+```
+case_study1/
+├── README.md
+├── pyproject.toml                  # Poetry config & project metadata
+├── poetry.lock                     # Locked dependency versions
+├── .gitignore
+├── app/
+│   ├── __init__.py
+│   ├── main.py                     # FastAPI application entry point
+│   ├── config.py                   # Pydantic-based settings management
+│   ├── database/
+│   │   ├── __init__.py
+│   │   └── schema.sql              # Snowflake DDL & seed data
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── common.py               # Shared response models (pagination, health, errors)
+│   │   ├── company.py              # Company & Industry Pydantic models
+│   │   ├── assessment.py           # Assessment lifecycle models
+│   │   ├── dimension.py            # Dimension score models
+│   │   └── enums.py                # Enums: AssessmentType, Status, Dimensions, Weights
+│   ├── routers/
+│   │   ├── __init__.py
+│   │   ├── health.py               # GET /health - dependency health checks
+│   │   ├── companies.py            # CRUD endpoints for companies
+│   │   ├── assessments.py          # Assessment lifecycle & scoring endpoints
+│   │   └── scores.py               # Dimension score update endpoint
+│   └── services/
+│       ├── __init__.py
+│       ├── snowflake.py            # Snowflake database service (queries, writes)
+│       ├── redis_cache.py          # Redis caching with TTL & key management
+│       └── s3_storage.py           # AWS S3 document storage operations
+├── docker/
+│   ├── Dockerfile                  # Multi-stage Python 3.11 container build
+│   └── docker-compose.yml          # Orchestration for API + Redis services
+└── tests/
+    ├── __init__.py
+    ├── conftest.py                 # Pytest fixtures & mock services
+    ├── test_api.py                 # API endpoint integration tests
+    └── test_models.py              # Pydantic model validation tests
+```
+
+---
+
+## Project Overview
+
+### Purpose
+
+The **PE Org-AI-R Platform** is a backend API designed to help Private Equity firms assess the AI-readiness of their portfolio companies. It provides a structured workflow for creating assessments, scoring companies across seven AI-readiness dimensions, and tracking assessment lifecycles from draft to approval.
+
+### Scope
+
+- **Company Management** -- CRUD operations for portfolio companies with industry classification
+- **Assessment Lifecycle** -- State-machine-driven workflow (Draft -> In Progress -> Submitted -> Approved)
+- **Dimension Scoring** -- Evaluate companies on 7 AI-readiness dimensions with configurable weights
+- **Document Storage** -- Store and retrieve SEC filings, reports, and assessment artifacts via S3
+- **Performance Caching** -- Redis-backed caching with dimension-specific TTLs
+
+### Tech Stack
+
+| Layer            | Technology                          | Purpose                                  |
+| ---------------- | ----------------------------------- | ---------------------------------------- |
+| **Framework**    | FastAPI 0.109 + Uvicorn 0.27        | Async REST API with auto-generated docs  |
+| **Language**     | Python 3.11+                        | Core application language                |
+| **Database**     | Snowflake                           | Cloud data warehouse for persistent data |
+| **Cache**        | Redis 7                             | In-memory caching layer                  |
+| **Object Store** | AWS S3                              | Document and artifact storage            |
+| **Validation**   | Pydantic 2.5                        | Request/response data validation         |
+| **Dependencies** | Poetry                              | Package management and lockfile          |
+| **Containers**   | Docker + Docker Compose             | Containerization and orchestration       |
+| **Testing**      | Pytest + pytest-asyncio + FakeRedis | Unit and integration testing             |
+
+---
+
+## Step-by-Step Guide
+
+### Prerequisites
 
 - **Python 3.11+**
 - **Poetry** (dependency management)
@@ -9,53 +102,31 @@
 - **Snowflake account** (free trial available)
 - **AWS account** (for S3, free tier available)
 
----
-
-## Quick Start
+### Step 1: Clone the Repository
 
 ```bash
-# 1. Clone the repository
-cd folder name
-
-# 2. Install Poetry (if not installed)
-
-# 3. Install dependencies
-poetry install
-
-# 4. Configure environment
-# Edit .env with your credentials
-
-# 5. Start Redis
-docker run -d --name redis-local -p 6379:6379 redis:7-alpine
-
-# 6. Run the application
-poetry run uvicorn app.main:app --reload
+git clone <repository-url>
+cd case_study1
 ```
 
----
+### Step 2: Install Dependencies
 
-## Configuration Guide
+```bash
+# Install Poetry if not already installed
+curl -sSL https://install.python-poetry.org | python3 -
 
-### 1. Snowflake Setup
+# Install project dependencies
+poetry install
+```
 
-#### Step 1: Create a Snowflake Account
+### Step 3: Configure Snowflake
 
-1. Go to [https://signup.snowflake.com/](https://signup.snowflake.com/)
-2. Sign up for a **free 30-day trial**
-3. Choose your cloud provider (AWS/Azure/GCP) and region
-4. Complete registration and verify your email
-
-#### Step 2: Get Your Account Identifier
-
-
-#### Step 3: Create Database and Tables
-
-1. Log in to Snowflake Web UI
-2. Click **"Worksheets"** → **"+"** to create a new worksheet
-3. Execute the following SQL **step by step**:
+1. Sign up at [https://signup.snowflake.com/](https://signup.snowflake.com/) for a free 30-day trial
+2. Log in to the Snowflake Web UI and open a new **Worksheet**
+3. Execute the following SQL statements step by step:
 
 ```sql
--- Step 1: Create Warehouse and Database
+-- Create Warehouse and Database
 CREATE WAREHOUSE IF NOT EXISTS COMPUTE_WH WITH WAREHOUSE_SIZE = 'XSMALL';
 USE WAREHOUSE COMPUTE_WH;
 CREATE DATABASE IF NOT EXISTS PE_ORG_AIR;
@@ -64,7 +135,7 @@ USE SCHEMA PUBLIC;
 ```
 
 ```sql
--- Step 2: Create Tables
+-- Create Tables
 CREATE OR REPLACE TABLE industries (
     id VARCHAR(36) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -111,7 +182,7 @@ CREATE OR REPLACE TABLE dimension_scores (
 ```
 
 ```sql
--- Step 3: Insert Seed Data
+-- Insert Seed Data
 INSERT INTO industries (id, name, sector, h_r_base) VALUES
     ('550e8400-e29b-41d4-a716-446655440001', 'Manufacturing', 'Industrials', 72),
     ('550e8400-e29b-41d4-a716-446655440002', 'Healthcare Services', 'Healthcare', 78),
@@ -124,170 +195,104 @@ INSERT INTO industries (id, name, sector, h_r_base) VALUES
 ```
 
 ```sql
--- Step 4: Verify Setup
+-- Verify Setup
 SELECT * FROM industries;  -- Should show 8 rows
 ```
 
-#### Step 4: Update .env File
+### Step 4: Create an S3 Bucket
 
-```bash
-SNOWFLAKE_ACCOUNT=XXXXX-YYYYY        # Your account identifier
-SNOWFLAKE_USER=your_username          # Your login username
-SNOWFLAKE_PASSWORD=your_password      # Your password
-SNOWFLAKE_DATABASE=
-SNOWFLAKE_SCHEMA=
-SNOWFLAKE_WAREHOUSE=
-```
+1. Log in to [AWS Console](https://aws.amazon.com/)
+2. Navigate to **S3** and click **"Create bucket"**
+3. Set a globally unique bucket name and select your preferred region (e.g., `us-east-1`)
+4. Create an **IAM User** with `AmazonS3FullAccess` policy and generate access keys
 
----
-
-### 2. Redis Setup
-
-Redis is used for caching to improve API performance.
-
-#### Option A: Using Docker (Recommended)
-
-```bash
-# Start Redis container
-docker run -d --name redis-local -p 6379:6379 redis:7-alpine
-
-# Verify it's running
-docker ps
-```
-
-#### Option B: Using Docker Compose
-
-Redis is included in `docker-compose.yml` and will start automatically:
-
-```bash
-cd docker
-docker-compose --env-file ../.env up
-```
-
-#### Update .env File
-
-```bash
-REDIS_HOST=localhost    # Use 'redis' if running with docker-compose
-REDIS_PORT=6379
-REDIS_DB=0
-```
-
-### 3. AWS S3 Setup
-
-S3 is used for document storage (SEC filings, reports, etc.).
-
-#### Step 1: Create an AWS Account
-
-1. Go to [https://aws.amazon.com/](https://aws.amazon.com/)
-2. Click **"Create an AWS Account"**
-3. Complete the registration process
-
-#### Step 2: Create an S3 Bucket
-
-1. Log in to **AWS Console**
-2. Search for **"S3"** and click to enter
-3. Click **"Create bucket"**
-4. Configure:
-   - **Bucket name**: `yourname` (must be globally unique)
-   - **AWS Region**: `us-east-1` (or your preferred region)
-5. Keep other settings as default
-6. Click **"Create bucket"**
-
-#### Step 3: Create IAM User and Access Keys
-
-1. In AWS Console, search for **"IAM"**
-2. Click **"Users"** → **"Create user"**
-3. **User name**: `your name`
-4. Click **"Next"**
-5. Select **"Attach policies directly"**
-6. Search and select **`AmazonS3FullAccess`**
-7. Click **"Next"** → **"Create user"**
-
-8. Click on the created user → **"Security credentials"** tab
-9. Scroll to **"Access keys"** → **"Create access key"**
-10. Select **"Local code"** → **"Next"**
-11. Click **"Create access key"**
-12. **⚠️ IMPORTANT**: Copy and save both:
-    - **Access key ID**: `.......`
-    - **Secret access key**: `xxxxxxxx`
-    
-    > The secret key is shown only once!
-
----
-
-## Environment Variables
+### Step 5: Configure Environment Variables
 
 Create a `.env` file in the project root:
 
 ```bash
-# ==============================================
 # Application Settings
-# ==============================================
 APP_NAME="PE Org-AI-R Platform"
 APP_VERSION="1.0.0"
 DEBUG=true
 
-# ==============================================
 # Snowflake Configuration
-# ==============================================
 SNOWFLAKE_ACCOUNT=XXXXX-YYYYY
 SNOWFLAKE_USER=your_username
 SNOWFLAKE_PASSWORD=your_password
-SNOWFLAKE_DATABASE=your_database_name
-SNOWFLAKE_SCHEMA=
-SNOWFLAKE_WAREHOUSE=
+SNOWFLAKE_DATABASE=PE_ORG_AIR
+SNOWFLAKE_SCHEMA=PUBLIC
+SNOWFLAKE_WAREHOUSE=COMPUTE_WH
 
-# ==============================================
 # Redis Configuration
-# ==============================================
-REDIS_HOST=localhost    # Use 'redis' if running with docker-compose
+REDIS_HOST=localhost       # Use 'redis' if running with docker-compose
 REDIS_PORT=6379
 REDIS_DB=0
 
-# ==============================================
 # AWS S3 Configuration
-# ==============================================
 AWS_ACCESS_KEY_ID=your_aws_access_key_id
 AWS_SECRET_ACCESS_KEY=your_secret_key
-AWS_REGION=your_aws_region
+AWS_REGION=us-east-1
 S3_BUCKET=your_bucket_name
 ```
 
----
+### Step 6: Run the Application
 
-## Running the Application
-
-### Option 1: Local Development
+#### Option A: Local Development
 
 ```bash
-# Make sure Redis is running
+# Start Redis
 docker run -d --name redis-local -p 6379:6379 redis:7-alpine
 
-# Start the API
+# Start the API server
 poetry run uvicorn app.main:app --reload
 ```
 
-### Option 2: Docker Compose
+#### Option B: Docker Compose (Recommended)
 
-```bash
-# Start all services
+```bashArchitecture Diagram
 cd docker
-docker-compose --env-file ../.env up --build
+docker compose --env-file ../.env up --build
 ```
 
-
-### Interactive Documentation
+### Step 7: Verify the Setup
 
 - **Swagger UI**: http://127.0.0.1:8000/docs
-- **ReDoc**: http://127.0.0.1:8000/redoc
-- **OpenAPI JSON**: http://127.0.0.1:8000/openapi.json
+
+### Step 8: Run Tests
+
+```bash
+# Run all tests
+poetry run pytest
+
+```
 
 ---
 
-## Testing
+## API Endpoints
 
-### Run All Tests
+| Method   | Endpoint                          | Description                            |
+| -------- | --------------------------------- | -------------------------------------- |
+| `GET`    | `/health`                         | Health check for all dependencies      |
+| `POST`   | `/api/v1/companies`               | Create a new company                   |
+| `GET`    | `/api/v1/companies`               | List companies (paginated, filterable) |
+| `GET`    | `/api/v1/companies/{id}`          | Get company by ID                      |
+| `PUT`    | `/api/v1/companies/{id}`          | Update a company                       |
+| `DELETE` | `/api/v1/companies/{id}`          | Soft-delete a company                  |
+| `POST`   | `/api/v1/assessments`             | Create a new assessment                |
+| `GET`    | `/api/v1/assessments`             | List assessments (with filters)        |
+| `GET`    | `/api/v1/assessments/{id}`        | Get assessment by ID                   |
+| `PATCH`  | `/api/v1/assessments/{id}/status` | Update assessment status               |
+| `POST`   | `/api/v1/assessments/{id}/scores` | Bulk add dimension scores              |
+| `GET`    | `/api/v1/assessments/{id}/scores` | Get assessment dimension scores        |
+| `PUT`    | `/api/v1/scores/{id}`             | Update a dimension score               |
 
-```bash
-poetry run pytest
-```
+---
+
+## Team Member Contributions
+
+| Team Member      | Contributions                                                                                                                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Nisarg Sheth** | Docker configuration ([Dockerfile](docker/Dockerfile), [docker-compose.yml](docker/docker-compose.yml)) and all test suites ([tests/](tests/))                                                          |
+| **Wei Cheng Tu** | API endpoint development ([routers/](app/routers/)) and third-party infrastructure services: S3 ([s3_storage.py](app/services/s3_storage.py)) and Snowflake ([snowflake.py](app/services/snowflake.py)) |
+| **Yu Tzu Li**    | Database schema design ([schema.sql](app/database/schema.sql)), Pydantic models ([models/](app/models/)), and application configuration ([config.py](app/config.py))                                    |
